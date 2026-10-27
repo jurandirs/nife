@@ -12,10 +12,11 @@ from .explainer import (
     fidelity_table,
 )
 from .search import counterfactuals_from_rules
-from .surrogate import DEFAULT_TREE_PARAMS, Rule
+from .surrogate import DEFAULT_MAX_DEPTH, DEFAULT_TREE_PARAMS, Rule
 
 __all__ = [
     "ADAPTIVE_NEIGHBORHOODS",
+    "DEFAULT_MAX_DEPTH",
     "DEFAULT_TREE_PARAMS",
     "Rule",
     "TreeCounterfactualExplainer",

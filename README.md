@@ -100,12 +100,15 @@ these options work the same way whatever the method:
 2. **Surrogate tree.** A decision tree learns the model's behavior in that neighborhood. The
    features it uses, with their importances, are the **relevant features** of the prediction; the
    path of the instance from the root to its leaf is the **decision path**.
-3. **Counterfactuals.** Crossing the deepest decision of the path leads to another outcome. The
-   examples of the data on the other side of that decision are counterfactuals — plausible, since
-   they are real examples.
+3. **Counterfactuals.** Going up the decision path from the leaf, the first decision whose other
+   side the tree gives another outcome is the one to cross (Algorithm 1 of the paper). The examples
+   of the data on the other side of that decision that the model confirms are counterfactuals —
+   plausible, since they are real examples.
 
 Its own options:
 
+- **Depth of the tree** (`max_depth`): 5 by default, as in the paper; other parameters of the tree
+  go in `tree_params`.
 - **Counterfactuals from the rules** (`from_rules=True`): for each feature of the decision path,
   the instance with only that feature moved to the closest value, seen in the data on the other
   side of the decision, that the model confirms. They change a single feature and are very close

@@ -6,8 +6,10 @@ The method of Silva, Aguilar and Salvini (2026):
 2. fit a decision tree on it — the surrogate, which shows the relevant features
    (those the tree uses, with their importances) and the decision path of the
    instance (the rules);
-3. cross the deepest decision of the path: the examples of the data on its other
-   side whose prediction changes are counterfactuals.
+3. go up the decision path from the leaf until the other side of a decision leads
+   to another outcome (Algorithm 1 of the paper) and cross that decision: the
+   examples of the data on its other side whose prediction changes are
+   counterfactuals.
 
 NIFE adds single-feature counterfactuals built from the rules, immutable features
 that the tree never splits on, an adaptive neighborhood and a measure of the
@@ -25,7 +27,16 @@ import pandas as pd
 
 from ..base import CounterfactualExplainer, CounterfactualExplanation, RandomState
 from .search import counterfactuals_from_rules, search_existing
-from .surrogate import Rule, SurrogateTree, decision_path_rules, fit_surrogate, sample_neighborhood, surrogate_fidelity
+from .surrogate import (
+    DEFAULT_MAX_DEPTH,
+    Rule,
+    SurrogateTree,
+    climb_to_counterfactual,
+    decision_path_rules,
+    fit_surrogate,
+    sample_neighborhood,
+    surrogate_fidelity,
+)
 
 #: Neighborhoods tried by the adaptive search, narrowest first:
 #: (sample around the instance, scale of the standard deviation).
@@ -45,8 +56,9 @@ class TreeCounterfactualExplanation(CounterfactualExplanation):
     rules : list of Rule
         The decision path of the instance in the surrogate tree.
     crossed_rule : Rule or None
-        The decision whose other side holds the counterfactuals taken from the data —
-        the deepest one on a mutable feature.
+        The decision whose other side holds the counterfactuals taken from the data:
+        going up the path from the leaf, the first one (on a mutable feature) whose
+        other side the tree gives a counterfactual outcome.
     candidates : pd.DataFrame
         The examples of the data on the other side of `crossed_rule`, with the model's
         ``prediction`` and an ``is_counterfactual`` column; their index is the one
@@ -147,8 +159,10 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         the mean of the data (the original method), and scale its spread.
     num_samples : int, optional
         Size of the neighborhood; five times the size of `data` by default.
+    max_depth : int
+        Maximum depth of the surrogate tree (5, as in Silva et al., 2026).
     tree_params : dict, optional
-        Parameters of the surrogate tree, over
+        Other parameters of the surrogate tree, over
         `nife.counterfactual.tree.DEFAULT_TREE_PARAMS`.
     fidelity_neighbors : int
         Number of nearest examples of the data on which the local fidelity is measured.
@@ -170,10 +184,15 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         sample_around_instance: bool = False,
         neighborhood_scale: float = 1.0,
         num_samples: Optional[int] = None,
+        max_depth: int = DEFAULT_MAX_DEPTH,
         tree_params: Optional[dict] = None,
         fidelity_neighbors: int = 50,
         random_state: RandomState = None,
     ):
+        if tree_params and "max_depth" in tree_params:
+            raise ValueError("set the depth of the tree with max_depth, not in tree_params")
+        if max_depth < 1:
+            raise ValueError(f"max_depth must be at least 1, got {max_depth}")
         super().__init__(
             model,
             data,
@@ -188,6 +207,7 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         self.sample_around_instance = sample_around_instance
         self.neighborhood_scale = neighborhood_scale
         self.num_samples = num_samples or 5 * len(self.data)
+        self.max_depth = max_depth
         self.tree_params = tree_params
         self.fidelity_neighbors = fidelity_neighbors
 
@@ -282,16 +302,17 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         # Immutable features keep the instance's values, so the tree only splits on the others
         neighborhood[:, self._immutable_idx] = x_row[0, self._immutable_idx]
         labels = self.model.predict(pd.DataFrame(neighborhood, columns=self.feature_names))
-        tree = fit_surrogate(neighborhood, labels, self.mode, self.tree_params)
+        tree = fit_surrogate(neighborhood, labels, self.mode, self.max_depth, self.tree_params)
         rules = decision_path_rules(tree, x_row, self.feature_names)
         fidelity = surrogate_fidelity(
             tree, x_row, prediction, len(rules), self._values_f32, self._predictions, x_points, self._points,
             self._space.n_features, self.mode, self.tolerance, self.fidelity_neighbors, around, scale,
         )
 
-        # Cross the deepest decision of the path that is not on an immutable feature
-        mutable = [k for k, rule in enumerate(rules) if rule.feature not in self.immutable_features]
-        crossed = mutable[-1] if mutable else None
+        # Go up the path until the other side of a decision leads to a counterfactual outcome
+        crossed = climb_to_counterfactual(
+            tree, x_row, rules, prediction, self.mode, desired, self.tolerance, self.immutable_features
+        ) if rules else None
         if rules and crossed is None:
             candidates = self._search_data.iloc[:0].assign(is_counterfactual=pd.Series(dtype=bool))
         else:

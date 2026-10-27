@@ -20,12 +20,12 @@ SurrogateTree = Union[DecisionTreeClassifier, DecisionTreeRegressor]
 
 OPERATORS = {"<=": operator.le, ">": operator.gt}
 
-#: Default parameters of the surrogate tree, by mode (any other parameter of
+#: Default maximum depth of the surrogate tree (Silva et al., 2026).
+DEFAULT_MAX_DEPTH = 5
+
+#: Default parameters of the surrogate tree besides its depth (any parameter of
 #: scikit-learn's trees can be passed in ``tree_params``).
-DEFAULT_TREE_PARAMS = {
-    "classification": dict(max_depth=3, min_samples_split=0.1, min_samples_leaf=2, ccp_alpha=0.02, random_state=0),
-    "regression": dict(max_depth=5, min_samples_split=0.1, min_samples_leaf=2, ccp_alpha=0.02, random_state=0),
-}
+DEFAULT_TREE_PARAMS = dict(min_samples_split=0.1, min_samples_leaf=2, ccp_alpha=0.02, random_state=0)
 
 
 class Rule(NamedTuple):
@@ -78,9 +78,11 @@ def sample_neighborhood(
     return neighborhood.astype(np.float32)
 
 
-def fit_surrogate(X: np.ndarray, y, mode: str, tree_params: Optional[dict] = None) -> SurrogateTree:
+def fit_surrogate(
+    X: np.ndarray, y, mode: str, max_depth: int = DEFAULT_MAX_DEPTH, tree_params: Optional[dict] = None
+) -> SurrogateTree:
     """Fit the surrogate tree on the neighborhood `X`, labeled `y` by the model."""
-    params = {**DEFAULT_TREE_PARAMS[mode], **(tree_params or {})}
+    params = {**DEFAULT_TREE_PARAMS, **(tree_params or {}), "max_depth": max_depth}
     tree = DecisionTreeClassifier(**params) if mode == "classification" else DecisionTreeRegressor(**params)
     return tree.fit(X, y)
 
@@ -94,6 +96,48 @@ def decision_path_rules(tree: SurrogateTree, x_row: np.ndarray, feature_names: S
         op = "<=" if x_row[0, feature[node]] <= threshold[node] else ">"
         rules.append(Rule(feature_names[feature[node]], op, float(threshold[node])))
     return rules
+
+
+def node_outcome(tree: SurrogateTree, node: int):
+    """The outcome the tree gives at `node`: its majority class, or its mean in regression."""
+    value = tree.tree_.value[node]
+    if isinstance(tree, DecisionTreeClassifier):
+        return tree.classes_[int(np.argmax(value[0]))]
+    return float(value[0][0])
+
+
+def climb_to_counterfactual(
+    tree: SurrogateTree,
+    x_row: np.ndarray,
+    rules: Sequence[Rule],
+    prediction,
+    mode: str,
+    desired=None,
+    tolerance: float = 0.05,
+    immutable_features: Sequence[str] = (),
+) -> Optional[int]:
+    """The decision of the path to cross: Algorithm 1 of Silva et al. (2026).
+
+    Starting at the leaf of the instance, go up its decision path: at each node, if
+    the tree gives the other side of the parent's decision (the sibling node) an
+    outcome that is a counterfactual outcome for the instance's `prediction` (see
+    `is_counterfactual`, with `desired`), that decision is the one to cross;
+    otherwise the parent becomes the current node. Decisions on immutable features
+    are never crossed.
+
+    Returns the position of the decision in `rules`, or None if no decision of the
+    path leads to a counterfactual outcome.
+    """
+    path = tree.decision_path(x_row).indices  # from the root to the leaf
+    left, right = tree.tree_.children_left, tree.tree_.children_right
+    for depth in range(len(path) - 1, 0, -1):
+        node, parent = path[depth], path[depth - 1]
+        if rules[depth - 1].feature in immutable_features:
+            continue
+        sibling = right[parent] if left[parent] == node else left[parent]
+        if is_counterfactual(node_outcome(tree, sibling), prediction, mode, desired, tolerance):
+            return depth - 1
+    return None
 
 
 def surrogate_fidelity(

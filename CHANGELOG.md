@@ -11,7 +11,8 @@ First public release, with counterfactual explanations (`nife.counterfactual`).
 - `CounterfactualExplainer`: base class of the counterfactual methods — desired outcomes,
   immutable features, confirmation by the model, selection, many instances and evaluation.
 - `TreeCounterfactualExplainer`: counterfactual explanations and feature relevance with a
-  surrogate decision tree (Silva, Aguilar and Salvini, ICAART 2026), with single-feature
+  surrogate decision tree (Silva, Aguilar and Salvini, ICAART 2026) — tree of depth 5 by default
+  (`max_depth`), decision to cross chosen by going up the path (Algorithm 1) — with single-feature
   counterfactuals built from the rules, an adaptive neighborhood and the fidelity of the tree;
   `plot_tree` (matplotlib).
 - `select_counterfactuals`: the closest or the nondominated counterfactuals of each instance.
