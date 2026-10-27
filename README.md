@@ -31,7 +31,7 @@ NIFE works with any model that has a `predict` method, for classification and re
 pip install nife
 ```
 
-NIFE requires Python 3.9 or later, with NumPy, pandas, scikit-learn and matplotlib. To install
+NIFE requires Python 3.10 or later, with NumPy, pandas, scikit-learn and matplotlib. To install
 the development version from GitHub:
 
 ```bash
