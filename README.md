@@ -4,7 +4,6 @@
 [![Python](https://img.shields.io/pypi/pyversions/nife.svg)](https://pypi.org/project/nife/)
 [![Tests](https://github.com/jurandirs/nife/actions/workflows/tests.yml/badge.svg)](https://github.com/jurandirs/nife/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Paper](https://img.shields.io/badge/DOI-10.5220%2F0014338700004052-informational)](https://doi.org/10.5220/0014338700004052)
 
 NIFE is a Python framework for explaining the predictions of machine-learning models. It is
 organized by **kind of explanation**, each with the **methods** that produce it and the
@@ -210,13 +209,26 @@ To run them: `pip install "nife[examples]"`.
 
 ## How to cite
 
-If you use NIFE in your research, please cite the paper that introduced its counterfactual
-method:
+If you use NIFE, please cite it:
 
-> Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations
-> and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th
-> International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*,
-> pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052
+```bibtex
+@software{nife,
+  author  = {Silva, Jurandir},
+  title   = {{NIFE}: {NIFE} Is a Framework for Explanations},
+  url     = {https://github.com/jurandirs/nife},
+  version = {0.1.0},
+  year    = {2026}
+}
+```
+
+The "Cite this repository" button on GitHub gives the same citation, from
+[`CITATION.cff`](CITATION.cff).
+
+If you use one of NIFE's methods, please also cite the work that introduced it:
+
+| Method | Reference |
+|---|---|
+| `TreeCounterfactualExplainer` | Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*, pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052 |
 
 ```bibtex
 @inproceedings{silva2026unveiling,
@@ -232,18 +244,8 @@ method:
 }
 ```
 
-To cite the software itself, use the "Cite this repository" button on GitHub (from
-[`CITATION.cff`](CITATION.cff)) or:
-
-```bibtex
-@software{nife,
-  author  = {Silva, Jurandir},
-  title   = {{NIFE}: {NIFE} Is a Framework for Explanations},
-  url     = {https://github.com/jurandirs/nife},
-  version = {0.1.0},
-  year    = {2026}
-}
-```
+The evaluation metrics have their own references, listed in the
+[metrics table](#explaining-and-evaluating-many-instances).
 
 ## Contributing
 

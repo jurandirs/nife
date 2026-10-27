@@ -50,7 +50,6 @@ Homepage = "https://github.com/jurandirs/nife"
 Repository = "https://github.com/jurandirs/nife"
 Issues = "https://github.com/jurandirs/nife/issues"
 Changelog = "https://github.com/jurandirs/nife/blob/main/CHANGELOG.md"
-Paper = "https://doi.org/10.5220/0014338700004052"
 
 [tool.setuptools.packages.find]
 where = ["src"]
