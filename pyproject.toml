@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nife"
+version = "0.1.0"
+description = "NIFE Is a Framework for Explanations: explanations of machine-learning models, starting with counterfactual explanations"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jurandir Silva", email = "jurandirjdsilva@gmail.com" }]
+keywords = [
+    "explainable ai",
+    "xai",
+    "interpretability",
+    "counterfactual explanations",
+    "explanation methods",
+    "evaluation metrics",
+    "decision trees",
+    "machine learning",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.23",
+    "pandas>=1.5",
+    "scikit-learn>=1.2",
+    "matplotlib>=3.5",
+]
+
+[project.optional-dependencies]
+examples = ["jupyter"]
+dev = ["pytest>=7", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/jurandirs/nife"
+Repository = "https://github.com/jurandirs/nife"
+Issues = "https://github.com/jurandirs/nife/issues"
+Changelog = "https://github.com/jurandirs/nife/blob/main/CHANGELOG.md"
+Paper = "https://doi.org/10.5220/0014338700004052"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
