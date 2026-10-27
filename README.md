@@ -71,7 +71,7 @@ fidelity to the model (`explanation.fidelity`). `explanation.plot_tree()` draws 
 instance's path in green and, in orange, the other side of the crossed rule — where the
 counterfactuals lie:
 
-![The surrogate tree of the explanation](https://raw.githubusercontent.com/jurandirs/nife/main/docs/images/explanation_tree.png)
+![The surrogate tree of the explanation](docs/images/explanation_tree.png)
 
 ## Counterfactual explanations
 
