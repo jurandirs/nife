@@ -107,8 +107,10 @@ these options work the same way whatever the method:
 
 Its own options:
 
-- **Depth of the tree** (`max_depth`): 5 by default, as in the paper; other parameters of the tree
-  go in `tree_params`.
+- **Parameters of the tree**: `max_depth` is 5 by default, as in the paper; `min_samples_split`
+  (0.1), `min_samples_leaf` (2) and `ccp_alpha` (0.02) default to the values of the original
+  research (the paper keeps scikit-learn's defaults). Any other parameter of scikit-learn's
+  decision trees goes in `tree_params`.
 - **Counterfactuals from the rules** (`from_rules=True`): for each feature of the decision path,
   the instance with only that feature moved to the closest value, seen in the data on the other
   side of the decision, that the model confirms. They change a single feature and are very close

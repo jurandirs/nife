@@ -54,6 +54,24 @@ def test_max_depth(iris):
         TreeCounterfactualExplainer(model, X, tree_params={"max_depth": 3})
 
 
+def test_tree_parameters(iris):
+    X, model = iris
+    defaults = TreeCounterfactualExplainer(model, X, random_state=1).explain(X.iloc[0]).surrogate.get_params()
+    assert (defaults["max_depth"], defaults["min_samples_split"], defaults["min_samples_leaf"], defaults["ccp_alpha"]) == (
+        5, 0.1, 2, 0.02,
+    )
+    paper = TreeCounterfactualExplainer(
+        model, X, min_samples_split=2, min_samples_leaf=1, ccp_alpha=0.0, tree_params={"criterion": "entropy"},
+        random_state=1,
+    )
+    params = paper.explain(X.iloc[0]).surrogate.get_params()
+    assert (params["min_samples_split"], params["min_samples_leaf"], params["ccp_alpha"], params["criterion"]) == (
+        2, 1, 0.0, "entropy",
+    )
+    with pytest.raises(ValueError):
+        TreeCounterfactualExplainer(model, X, tree_params={"ccp_alpha": 0.0})
+
+
 def test_crossed_rule_leads_to_another_outcome(iris):
     X, model = iris
     explainer = TreeCounterfactualExplainer(model, X, random_state=1)

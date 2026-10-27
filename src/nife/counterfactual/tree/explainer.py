@@ -28,7 +28,7 @@ import pandas as pd
 from ..base import CounterfactualExplainer, CounterfactualExplanation, RandomState
 from .search import counterfactuals_from_rules, search_existing
 from .surrogate import (
-    DEFAULT_MAX_DEPTH,
+    DEFAULT_TREE_PARAMS,
     Rule,
     SurrogateTree,
     climb_to_counterfactual,
@@ -161,9 +161,12 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         Size of the neighborhood; five times the size of `data` by default.
     max_depth : int
         Maximum depth of the surrogate tree (5, as in Silva et al., 2026).
+    min_samples_split, min_samples_leaf, ccp_alpha
+        Parameters of the surrogate tree (see scikit-learn's decision trees); the
+        defaults come from the original research (the paper keeps scikit-learn's
+        defaults: 2, 1 and 0.0).
     tree_params : dict, optional
-        Other parameters of the surrogate tree, over
-        `nife.counterfactual.tree.DEFAULT_TREE_PARAMS`.
+        Any other parameter of scikit-learn's decision trees.
     fidelity_neighbors : int
         Number of nearest examples of the data on which the local fidelity is measured.
     """
@@ -184,13 +187,21 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         sample_around_instance: bool = False,
         neighborhood_scale: float = 1.0,
         num_samples: Optional[int] = None,
-        max_depth: int = DEFAULT_MAX_DEPTH,
+        max_depth: int = DEFAULT_TREE_PARAMS["max_depth"],
+        min_samples_split: Union[int, float] = DEFAULT_TREE_PARAMS["min_samples_split"],
+        min_samples_leaf: Union[int, float] = DEFAULT_TREE_PARAMS["min_samples_leaf"],
+        ccp_alpha: float = DEFAULT_TREE_PARAMS["ccp_alpha"],
         tree_params: Optional[dict] = None,
         fidelity_neighbors: int = 50,
         random_state: RandomState = None,
     ):
-        if tree_params and "max_depth" in tree_params:
-            raise ValueError("set the depth of the tree with max_depth, not in tree_params")
+        named = dict(
+            max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf,
+            ccp_alpha=ccp_alpha,
+        )
+        repeated = sorted(set(tree_params or {}) & set(named))
+        if repeated:
+            raise ValueError(f"set {repeated} with their own arguments, not in tree_params")
         if max_depth < 1:
             raise ValueError(f"max_depth must be at least 1, got {max_depth}")
         super().__init__(
@@ -208,7 +219,11 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         self.neighborhood_scale = neighborhood_scale
         self.num_samples = num_samples or 5 * len(self.data)
         self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.min_samples_leaf = min_samples_leaf
+        self.ccp_alpha = ccp_alpha
         self.tree_params = tree_params
+        self._tree_params = {**(tree_params or {}), **named}
         self.fidelity_neighbors = fidelity_neighbors
 
         self._values = self.data.to_numpy(dtype=np.float64)
@@ -302,7 +317,7 @@ class TreeCounterfactualExplainer(CounterfactualExplainer):
         # Immutable features keep the instance's values, so the tree only splits on the others
         neighborhood[:, self._immutable_idx] = x_row[0, self._immutable_idx]
         labels = self.model.predict(pd.DataFrame(neighborhood, columns=self.feature_names))
-        tree = fit_surrogate(neighborhood, labels, self.mode, self.max_depth, self.tree_params)
+        tree = fit_surrogate(neighborhood, labels, self.mode, self._tree_params)
         rules = decision_path_rules(tree, x_row, self.feature_names)
         fidelity = surrogate_fidelity(
             tree, x_row, prediction, len(rules), self._values_f32, self._predictions, x_points, self._points,

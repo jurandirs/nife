@@ -20,12 +20,11 @@ SurrogateTree = Union[DecisionTreeClassifier, DecisionTreeRegressor]
 
 OPERATORS = {"<=": operator.le, ">": operator.gt}
 
-#: Default maximum depth of the surrogate tree (Silva et al., 2026).
-DEFAULT_MAX_DEPTH = 5
-
-#: Default parameters of the surrogate tree besides its depth (any parameter of
-#: scikit-learn's trees can be passed in ``tree_params``).
-DEFAULT_TREE_PARAMS = dict(min_samples_split=0.1, min_samples_leaf=2, ccp_alpha=0.02, random_state=0)
+#: Default parameters of the surrogate tree: the depth of Silva et al. (2026) and the
+#: other values of the original research (the paper keeps scikit-learn's defaults:
+#: ``min_samples_split=2``, ``min_samples_leaf=1``, ``ccp_alpha=0.0``).
+DEFAULT_TREE_PARAMS = dict(max_depth=5, min_samples_split=0.1, min_samples_leaf=2, ccp_alpha=0.02)
+DEFAULT_MAX_DEPTH = DEFAULT_TREE_PARAMS["max_depth"]
 
 
 class Rule(NamedTuple):
@@ -78,11 +77,12 @@ def sample_neighborhood(
     return neighborhood.astype(np.float32)
 
 
-def fit_surrogate(
-    X: np.ndarray, y, mode: str, max_depth: int = DEFAULT_MAX_DEPTH, tree_params: Optional[dict] = None
-) -> SurrogateTree:
-    """Fit the surrogate tree on the neighborhood `X`, labeled `y` by the model."""
-    params = {**DEFAULT_TREE_PARAMS, **(tree_params or {}), "max_depth": max_depth}
+def fit_surrogate(X: np.ndarray, y, mode: str, params: Optional[dict] = None) -> SurrogateTree:
+    """Fit the surrogate tree on the neighborhood `X`, labeled `y` by the model.
+
+    `params` are parameters of scikit-learn's trees, over `DEFAULT_TREE_PARAMS`.
+    """
+    params = {**DEFAULT_TREE_PARAMS, "random_state": 0, **(params or {})}
     tree = DecisionTreeClassifier(**params) if mode == "classification" else DecisionTreeRegressor(**params)
     return tree.fit(X, y)
 
