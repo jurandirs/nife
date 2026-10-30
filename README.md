@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/nife.svg)](https://pypi.org/project/nife/)
 [![Python](https://img.shields.io/pypi/pyversions/nife.svg)](https://pypi.org/project/nife/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jurandirs/nife/blob/main/LICENSE)
 
 NIFE is a Python framework for explaining the predictions of machine-learning models. Today it
 provides counterfactual explanations of individual predictions, with one method and metrics to
@@ -13,7 +13,7 @@ its API may change before version 1.0.
 
 | Explanation | Methods | Evaluation |
 |---|---|---|
-| [Counterfactual](notebooks/counterfactual/counterfactual_explanations.ipynb) — the smallest change that would make the model predict something else, with a real counterpart from the data | [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) — surrogate decision tree, based on Silva, Aguilar and Salvini (2026) | [coverage and 8 metrics](notebooks/counterfactual/evaluation.ipynb), for counterfactuals found by any method |
+| [Counterfactual](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/counterfactual_explanations.ipynb) — the smallest change that would make the model predict something else, with a real counterpart from the data | [`TreeCounterfactualExplainer`](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) — surrogate decision tree, based on Silva, Aguilar and Salvini (2026) | [coverage and 8 metrics](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/evaluation.ipynb), for counterfactuals found by any method |
 
 NIFE is for tabular data: images, text and time series are not supported. It works with any model
 that has a `predict` method, for classification and regression, and calls only `predict`: a
@@ -70,7 +70,7 @@ the model puts in another class — change the model's prediction. Two are neede
 counterfactual changes two features: the closest takes `proline` and `malic_acid` from one of those
 wines. Each counterfactual also has a *counterpart*, the closest real wine that the model puts in
 its class (here, class 1). The
-[`TreeCounterfactualExplainer` notebook](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb)
+[`TreeCounterfactualExplainer` notebook](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer.ipynb)
 explains this output line by line.
 
 The counterfactuals are in `explanation.counterfactuals`, a DataFrame ranked from the closest to
@@ -87,7 +87,7 @@ of each bar is the middle 50% of the data):
 explanation.plot()
 ```
 
-![What the closest counterfactual changes](docs/images/plot_changes.png)
+![What the closest counterfactual changes](https://raw.githubusercontent.com/jurandirs/nife/main/docs/images/plot_changes.png)
 
 ## Guarantees and limits
 
@@ -114,23 +114,23 @@ features (500 rows).
 
 ## Notebooks
 
-Each kind of explanation and each method has its own notebook in [`notebooks/`](notebooks),
+Each kind of explanation and each method has its own notebook in [`notebooks/`](https://github.com/jurandirs/nife/tree/main/notebooks),
 organized like the package. They run on datasets bundled with scikit-learn:
 
-- [Counterfactual explanations](notebooks/counterfactual/counterfactual_explanations.ipynb) — what
+- [Counterfactual explanations](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/counterfactual_explanations.ipynb) — what
   NIFE calls a counterfactual and its counterpart, the options common to every method, how to
   explain many instances at once, and the `changes` plot:
-  - [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) —
+  - [`TreeCounterfactualExplainer`](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) —
     the surrogate decision tree method: the counterfactual rule and its evidence, the
     counterfactuals, the plots of the tree and its export, its options and its fidelity;
-  - [`TreeCounterfactualExplainer` neighborhood](notebooks/counterfactual/TreeCounterfactualExplainer_neighborhood.ipynb) —
+  - [`TreeCounterfactualExplainer` neighborhood](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer_neighborhood.ipynb) —
     the perturbed samples that its tree is trained on: extract them, change them and pass them
     back, or explain with a sampler of your own;
-  - [Evaluating counterfactuals](notebooks/counterfactual/evaluation.ipynb) — the metrics, for
+  - [Evaluating counterfactuals](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/evaluation.ipynb) — the metrics, for
     counterfactuals found by any method, and how to add new ones.
-- [Plots](notebooks/plots.ipynb) — the plots of every explanation, and how to place them in figures
+- [Plots](https://github.com/jurandirs/nife/blob/main/notebooks/plots.ipynb) — the plots of every explanation, and how to place them in figures
   of your own, save them and change their colors.
-- [Extending NIFE](notebooks/extending.ipynb) — new methods, metrics, plots and kinds of
+- [Extending NIFE](https://github.com/jurandirs/nife/blob/main/notebooks/extending.ipynb) — new methods, metrics, plots and kinds of
   explanation, and how to document them.
 
 The tests run every notebook, so they keep working as NIFE changes. To run the notebooks
@@ -151,26 +151,26 @@ If you use NIFE, please cite it:
 ```
 
 The "Cite this repository" button on GitHub gives the same citation, from
-[`CITATION.cff`](CITATION.cff).
+[`CITATION.cff`](https://github.com/jurandirs/nife/blob/main/CITATION.cff).
 
 If you use one of NIFE's methods, please also cite the work that introduced it; each method's
 notebook has its BibTeX entry:
 
 | Method | Reference |
 |---|---|
-| [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) | Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*, pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052 |
+| [`TreeCounterfactualExplainer`](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) | Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*, pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052 |
 
 `TreeCounterfactualExplainer` is based on this paper and extends it, for example with an adaptive
 neighborhood and counterfactuals that the model confirms, so its defaults do not give the paper's
 results. The notebook has a section on
-[reproducing the paper](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb#Reproducing-the-paper).
+[reproducing the paper](https://github.com/jurandirs/nife/blob/main/notebooks/counterfactual/TreeCounterfactualExplainer.ipynb#Reproducing-the-paper).
 
 The concepts and metrics that NIFE uses have their own references, listed in each notebook.
 
 ## Contributing
 
-Bug reports, questions and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports, questions and pull requests are welcome — see [CONTRIBUTING.md](https://github.com/jurandirs/nife/blob/main/CONTRIBUTING.md).
 
 ## License
 
-NIFE is released under the [MIT License](LICENSE).
+NIFE is released under the [MIT License](https://github.com/jurandirs/nife/blob/main/LICENSE).
