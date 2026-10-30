@@ -153,13 +153,16 @@ def surrogate_fidelity(
     mode: str,
     tolerance: float,
     n_neighbors: int,
-    around_instance: bool,
-    scale: float,
+    around_instance: Optional[bool],
+    scale: Optional[float],
+    neighborhood: str = "sampled",
 ) -> pd.Series:
     """Agreement between the tree and the model at the instance and on its nearest reference points.
 
     "Same outcome" is the complement of a counterfactual outcome: the same class, or
-    in regression a prediction within `tolerance`.
+    in regression a prediction within `tolerance`. The result also records where the
+    neighborhood came from (`neighborhood`: ``"sampled"``, ``"sampler"`` or
+    ``"given"``) and, for a sampled one, how it was sampled.
     """
     surrogate_prediction = tree.predict(x_row)[0]
     _, distances = next(distance_blocks(instance_points, reference_points, n_features))
@@ -172,6 +175,7 @@ def surrogate_fidelity(
             "surrogate_prediction": surrogate_prediction,
             "instance_agreement": not is_counterfactual(surrogate_prediction, prediction, mode, None, tolerance),
             "local_fidelity": float(same.mean()),
+            "neighborhood": neighborhood,
             "sample_around_instance": around_instance,
             "neighborhood_scale": scale,
         },

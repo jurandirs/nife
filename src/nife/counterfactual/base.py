@@ -1,24 +1,42 @@
 """Base classes of the counterfactual explainers.
 
+A counterfactual explanation of a prediction describes the smallest change to the
+feature values that changes the prediction to another outcome, or to a desired one
+(Wachter et al., 2018; Molnar, 2022): a counterfactual is an instance close to the
+one explained, with as few changed features as possible, that the model gives that
+outcome.
+
 A counterfactual method only has to find candidate counterfactuals for one instance
 (`CounterfactualExplainer._search`). The base class does everything else, the same
 way for every method: it validates the inputs, confirms with the model that each
 candidate reaches the counterfactual outcome (another one, or the desired one),
 drops those that change an immutable feature, measures their distance to the
-instance and their number of changed features, ranks and selects them, explains
-many instances at once and evaluates the counterfactuals.
+instance and their number of changed features, ranks and selects them, finds their
+counterparts, explains many instances at once and evaluates the counterfactuals.
+
+The counterpart of a counterfactual is the example of the reference data closest to
+it that the model gives the same outcome: a real case that shows the counterfactual
+is realistic. The closer it is, the more plausible the counterfactual (the likely
+feature values of Dandl et al., 2020). It does not confirm the counterfactual — the
+model does — but supports it with the data.
+
+Plots come from `nife.base`: every counterfactual explanation draws ``plot_changes``
+(what a counterfactual changes), and a method adds its own by defining more
+``plot_<kind>`` methods on its explanation type.
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from abc import abstractmethod
+from dataclasses import dataclass, field
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
-from ..distance import GowerSpace, paired_distances, select_points
+from ..base import Explainer, Explanation
+from ..distance import GowerSpace, distance_blocks, paired_distances, select_points
+from . import plots
 from .metrics import evaluate_counterfactuals
 from .outcomes import check_desired, check_mode, is_counterfactual
 from .selection import select_counterfactuals
@@ -32,7 +50,7 @@ def _plain(value):
 
 
 @dataclass(repr=False)
-class CounterfactualExplanation:
+class CounterfactualExplanation(Explanation):
     """The counterfactual explanation of one instance.
 
     Attributes
@@ -42,13 +60,26 @@ class CounterfactualExplanation:
     prediction
         The model's prediction for the instance.
     counterfactuals : pd.DataFrame
-        The counterfactuals: features, ``prediction`` (the model's), ``source`` (how
-        the method obtained them), ``distance`` (Gower distance to the instance) and
-        ``changed_features``; ranked by distance.
+        The counterfactuals — instances close to this one, with few changed features,
+        that the model gives a counterfactual outcome: the features, ``prediction``
+        (the model's), ``source`` (how the method obtained them), ``distance`` (Gower
+        distance to the instance), ``changed_features``, ``counterpart`` (the index, in
+        the reference data, of the closest example that the model gives the same
+        outcome) and ``counterpart_distance`` (its Gower distance to the
+        counterfactual); ranked by distance.
     mode : str
         "classification" or "regression".
     desired
         The desired outcome, if any.
+    reference_data : pd.DataFrame
+        The explainer's reference data (not a copy), on whose scale the plots measure
+        the changes.
+    categorical_features : list of str
+        The explainer's categorical features.
+    tolerance : float
+        The explainer's tolerance (regression).
+
+    Plots (see `plot_kinds`): ``plot_changes``, the default of ``plot()``.
     """
 
     instance: pd.Series
@@ -56,28 +87,107 @@ class CounterfactualExplanation:
     counterfactuals: pd.DataFrame
     mode: str
     desired: Any = None
+    reference_data: Optional[pd.DataFrame] = None
+    categorical_features: List[str] = field(default_factory=list)
+    tolerance: float = 0.05
+
+    default_plot = "changes"
+
+    def plot_changes(self, counterfactual: int = 0, *, max_features: int = 10, ax=None):
+        """What one counterfactual changes: each feature, from the instance's value to the counterfactual's.
+
+        `counterfactual` is its position in `counterfactuals` (0, the closest, by
+        default). Each line spans the range of the feature in the reference data. See
+        `nife.counterfactual.plots.plot_changes`. Returns the matplotlib Axes.
+        """
+        self._check_plottable()
+        if not -len(self.counterfactuals) <= counterfactual < len(self.counterfactuals):
+            raise IndexError(f"there are {len(self.counterfactuals)} counterfactuals, no counterfactual {counterfactual}")
+        chosen = self.counterfactuals.iloc[counterfactual]
+        position = counterfactual % len(self.counterfactuals)
+        subtitle = (
+            f"Counterfactual {position + 1} of {len(self.counterfactuals)}: predicted "
+            f"{plots.format_value(_plain(chosen['prediction']))} instead of {plots.format_value(_plain(self.prediction))}"
+            f" · distance {chosen['distance']:.3f} · {chosen['changed_features']} changed "
+            f"feature{'' if chosen['changed_features'] == 1 else 's'}"
+        )
+        if pd.notna(chosen.get("counterpart_distance", np.nan)):
+            subtitle += f" · counterpart at distance {chosen['counterpart_distance']:.3f}"
+        return plots.plot_changes(
+            self.instance, chosen, self.reference_data, categorical_features=self.categorical_features,
+            max_features=max_features, ax=ax, subtitle=subtitle,
+        )
+
+    def _check_plottable(self):
+        if not len(self.counterfactuals):
+            raise ValueError("this explanation has no counterfactuals to plot")
+        if self.reference_data is None:
+            raise ValueError("this explanation has no reference_data, on whose scale the changes are drawn")
 
     def _summary(self) -> List[str]:
-        lines = [
+        return [self._headline(), *self._counterfactual_lines()]
+
+    def _headline(self) -> str:
+        return (
             f"{type(self).__name__} ({self.mode}) of an instance predicted {_plain(self.prediction)!r}"
             + (f", desired {self.desired!r}" if self.desired is not None else "")
-        ]
-        sources = self.counterfactuals["source"].value_counts()
-        detail = ", ".join(f"{source}: {count}" for source, count in sources.items())
-        lines.append(f"  counterfactuals: {len(self.counterfactuals)}" + (f" ({detail})" if detail else ""))
-        if len(self.counterfactuals):
-            closest = self.counterfactuals.iloc[0]
+        )
+
+    #: How the summary names the ``source`` of the counterfactuals (others are shown as they are).
+    SOURCE_NAMES: ClassVar[Dict[str, str]] = {}
+
+    def _counterfactual_lines(self) -> List[str]:
+        counterfactuals = self.counterfactuals
+        line = f"  counterfactuals: {len(counterfactuals)}"
+        if len(counterfactuals):
+            changes = sorted(set(int(c) for c in counterfactuals["changed_features"]))
+            counted = f"{changes[0]}" if len(changes) == 1 else f"{changes[0]} to {changes[-1]}"
+            line += f", changing {counted} feature{'' if changes[-1] == 1 else 's'}"
+            line += " each" if len(counterfactuals) > 1 and len(changes) == 1 else ""
+            sources = counterfactuals["source"].value_counts()
+            line += " (" + ", ".join(
+                f"{count} {self.SOURCE_NAMES[source]}" if source in self.SOURCE_NAMES else f"{source}: {count}"
+                for source, count in sources.items()
+            ) + ")"
+        lines = [line]
+        if len(counterfactuals):
+            closest = counterfactuals.iloc[0]
+            counterpart = closest.get("counterpart_distance", np.nan)
             lines.append(
-                f"  closest: distance {closest['distance']:.3f}, {closest['changed_features']} changed features, "
-                f"predicted {_plain(closest['prediction'])!r}"
+                f"  closest: {self._describe_changes(closest)}; predicted {_plain(closest['prediction'])!r}"
+                f" (distance {closest['distance']:.3f}"
+                + (f"; counterpart at distance {counterpart:.3f})" if pd.notna(counterpart) else ")")
             )
         return lines
+
+    def _describe_changes(self, counterfactual: pd.Series, most: int = 3) -> str:
+        """``feature old -> new`` for the features that `counterfactual` changes (at most `most`)."""
+        changed = [f for f in self.instance.index if counterfactual[f] != self.instance[f]]
+        text = ", ".join(
+            f"{f} {plots.format_value(_plain(self.instance[f]))} -> {plots.format_value(_plain(counterfactual[f]))}"
+            for f in changed[:most]
+        )
+        return text + (f" and {len(changed) - most} more" if len(changed) > most else "")
 
     def __repr__(self) -> str:
         return "\n".join(self._summary())
 
 
-class CounterfactualExplainer(ABC):
+def _check_predictions_match_mode(predictions: np.ndarray, mode: str) -> None:
+    """Raise a clear error when the model's predictions do not fit `mode` (a regressor without mode="regression")."""
+    if mode == "classification" and predictions.dtype.kind == "f" and not np.all(np.mod(predictions, 1) == 0):
+        raise ValueError(
+            "the model's predictions are continuous but mode is 'classification'; "
+            "for a regression model, pass mode='regression'"
+        )
+    if mode == "regression" and predictions.dtype.kind not in "biuf":
+        raise ValueError(
+            "the model's predictions are not numbers but mode is 'regression'; "
+            "for a classification model, use mode='classification' (the default)"
+        )
+
+
+class CounterfactualExplainer(Explainer):
     """Base class of the counterfactual explainers.
 
     Parameters
@@ -109,6 +219,9 @@ class CounterfactualExplainer(ABC):
     #: The class of the explanations returned by `explain`.
     explanation_type = CounterfactualExplanation
 
+    #: The columns of the counterfactuals, after the features.
+    COLUMNS = ("prediction", "source", "distance", "changed_features", "counterpart", "counterpart_distance")
+
     def __init__(
         self,
         model,
@@ -124,6 +237,11 @@ class CounterfactualExplainer(ABC):
         check_mode(mode)
         if not hasattr(model, "predict"):
             raise TypeError("model must have a predict method")
+        if not isinstance(data, pd.DataFrame):
+            raise TypeError(
+                f"data must be a pandas DataFrame of numeric features, got {type(data).__name__}; "
+                "for an array, use pd.DataFrame(array, columns=feature_names)"
+            )
         self.model = model
         self.mode = mode
         self.data = data.drop(columns=[target]) if target is not None else data
@@ -140,6 +258,10 @@ class CounterfactualExplainer(ABC):
         self.tolerance = tolerance
         self.random_state = random_state
         self._space = GowerSpace(self.data, self.feature_names, self.categorical_features)
+        # The model's predictions for the reference data and its points, to find the counterparts
+        self._data_predictions = np.asarray(model.predict(self.data))
+        _check_predictions_match_mode(self._data_predictions, mode)
+        self._data_points = self._space.points(self.data)
 
     # --- to implement ---------------------------------------------------------------
 
@@ -232,7 +354,7 @@ class CounterfactualExplainer(ABC):
             self._explain(rows.iloc[[i]], desired, max_counterfactuals, nondominated, rng, options)
             for i in range(len(rows))
         ]
-        columns = ["instance", *self.feature_names, "prediction", "source", "distance", "changed_features"]
+        columns = ["instance", *self.feature_names, *self.COLUMNS]
         found = [e.counterfactuals.assign(instance=i) for i, e in enumerate(explanations) if len(e.counterfactuals)]
         counterfactuals = pd.concat(found, ignore_index=True)[columns] if found else pd.DataFrame(columns=columns)
         return (counterfactuals, explanations) if return_explanations else counterfactuals
@@ -288,12 +410,16 @@ class CounterfactualExplainer(ABC):
         candidates, details = self._search(x, prediction, desired, rng, **options)
         counterfactuals = self._confirm(candidates, x_values, prediction, desired)
         counterfactuals = select_counterfactuals(counterfactuals, max_counterfactuals, nondominated)
+        counterfactuals = self._add_counterparts(counterfactuals, prediction, desired)
         return self.explanation_type(
             instance=pd.Series(x_values, index=self.feature_names),
             prediction=prediction,
             counterfactuals=counterfactuals,
             mode=self.mode,
             desired=desired,
+            reference_data=self.data,
+            categorical_features=self.categorical_features,
+            tolerance=self.tolerance,
             **details,
         )
 
@@ -316,4 +442,36 @@ class CounterfactualExplainer(ABC):
             self._space.points(counterfactuals), instance_points, self._space.n_features
         )
         counterfactuals["changed_features"] = (counterfactuals[self.feature_names].to_numpy() != x_values).sum(axis=1)
+        return counterfactuals
+
+    def _add_counterparts(self, counterfactuals: pd.DataFrame, prediction, desired) -> pd.DataFrame:
+        """For each counterfactual, its counterpart: the closest example of the reference data with the same outcome.
+
+        The same outcome is the same class or, in regression, a counterfactual outcome
+        for the instance on the same side of its prediction. ``counterpart`` is the
+        example's index in the data and ``counterpart_distance`` its distance to the
+        counterfactual; both are missing when no example qualifies.
+        """
+        n = len(counterfactuals)
+        index = [None] * n
+        distance = np.full(n, np.nan)
+        if n:
+            reaches = is_counterfactual(self._data_predictions, prediction, self.mode, desired, self.tolerance)
+            outcomes = counterfactuals["prediction"].to_numpy()
+            points = self._space.points(counterfactuals[self.feature_names])
+            for rows, distances in distance_blocks(points, self._data_points, self._space.n_features):
+                for offset, row in enumerate(distances):
+                    i = rows.start + offset
+                    if self.mode == "classification":
+                        same = reaches & (self._data_predictions == outcomes[i])
+                    else:
+                        side = np.sign(np.asarray(outcomes[i], dtype=float) - float(prediction))
+                        same = reaches & (np.sign(self._data_predictions.astype(float) - float(prediction)) == side)
+                    if same.any():
+                        j = np.flatnonzero(same)[np.argmin(row[same])]
+                        index[i], distance[i] = self.data.index[j], row[j]
+        counterfactuals = counterfactuals.copy()
+        integer_index = pd.api.types.is_integer_dtype(self.data.index)
+        counterfactuals["counterpart"] = pd.array(index, dtype="Int64") if integer_index else pd.Series(index, dtype=object)
+        counterfactuals["counterpart_distance"] = distance
         return counterfactuals

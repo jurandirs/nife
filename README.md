@@ -2,27 +2,25 @@
 
 [![PyPI](https://img.shields.io/pypi/v/nife.svg)](https://pypi.org/project/nife/)
 [![Python](https://img.shields.io/pypi/pyversions/nife.svg)](https://pypi.org/project/nife/)
-[![Tests](https://github.com/jurandirs/nife/actions/workflows/tests.yml/badge.svg)](https://github.com/jurandirs/nife/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-NIFE is a Python framework for explaining the predictions of machine-learning models. It is
-organized by **kind of explanation**, each with the **methods** that produce it and the
-**metrics** that evaluate it, and is built to grow: new kinds of explanations, new methods and
-new metrics plug into the same structure.
+NIFE is a Python framework for explaining the predictions of machine-learning models. Today it
+provides counterfactual explanations of individual predictions, with one method and metrics to
+evaluate them; more kinds of explanations, methods and metrics are planned. NIFE is organized by
+**kind of explanation**, each with the **methods** that produce it, the **metrics** that evaluate
+it and the **plots** that show it, so that new ones plug into the same structure. It is in alpha:
+its API may change before version 1.0.
 
-Today NIFE provides **counterfactual explanations** — what would have to change for the model to
-predict something else — with:
+| Explanation | Methods | Evaluation |
+|---|---|---|
+| [Counterfactual](notebooks/counterfactual/counterfactual_explanations.ipynb) — the smallest change that would make the model predict something else, with a real counterpart from the data | [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) — surrogate decision tree, based on Silva, Aguilar and Salvini (2026) | [coverage and 8 metrics](notebooks/counterfactual/evaluation.ipynb), for counterfactuals found by any method |
 
-- the **surrogate decision tree** method of
-  [Silva, Aguilar and Salvini (ICAART 2026)](https://doi.org/10.5220/0014338700004052), which also
-  shows the features that drive each prediction;
-- **metrics** to evaluate counterfactuals found by any method.
-
-| Explanation | Module | Methods | Evaluation |
-|---|---|---|---|
-| Counterfactual | `nife.counterfactual` | `TreeCounterfactualExplainer` — surrogate decision tree (Silva et al., 2026) | `evaluate_counterfactuals` — 8 metrics, for any method |
-
-NIFE works with any model that has a `predict` method, for classification and regression.
+NIFE is for tabular data: images, text and time series are not supported. It works with any model
+that has a `predict` method, for classification and regression, and calls only `predict`: a
+counterfactual changes the predicted class or value, whatever the model's confidence. Besides the
+model, it takes the data, usually the one the model was trained on, as a pandas DataFrame of
+numeric features: encode categorical features as numbers and list them in `categorical_features`.
+Classification is the default; for a regression model, pass `mode="regression"`.
 
 ## Installation
 
@@ -57,160 +55,86 @@ print(explanation)
 TreeCounterfactualExplanation (classification) of an instance predicted 0
   decision path: color_intensity > 3.437 and proline > 651.7
   relevant features: proline, color_intensity, flavanoids
-  crossed rule: proline > 651.7 -> proline <= 651.7
-  counterfactuals: 42 (data: 42)
-  closest: distance 0.176, 13 changed features, predicted 1
+  counterfactual rule: proline > 651.7 -> proline <= 651.7 (not confirmed: changing proline alone keeps the model's prediction)
+  counterfactuals: 16, changing 2 features each (16 copied from evidence examples)
+  closest: malic_acid 1.71 -> 1.17, proline 1065 -> 510; predicted 1 (distance 0.039; counterpart at distance 0.137)
+  evidence: 42 examples of the data on the other side of the rule, the closest at distance 0.176
   fidelity: instance agreement True, local fidelity 1.00 (neighborhood: around the instance, scale 1)
 ```
 
-The explanation holds the counterfactuals (`explanation.counterfactuals`, a DataFrame ranked by
-distance to the instance), the decision path (`explanation.rules`), the relevance of the features
-(`explanation.feature_importances`), the surrogate tree (`explanation.surrogate`) and its
-fidelity to the model (`explanation.fidelity`). `explanation.plot_tree()` draws the tree with the
-instance's path in green and, in orange, the other side of the crossed rule — where the
-counterfactuals lie:
+A decision tree trained on the model's behavior around this wine explains its class: `proline` and
+`color_intensity` drive it, and in the tree `proline ≤ 651.7` would lead to class 1. The model
+disagrees: changing `proline` alone keeps class 0. So NIFE looks for the fewest values that,
+copied into the wine from the closest *evidence* — real wines on the other side of the rule that
+the model puts in another class — change the model's prediction. Two are needed, so each
+counterfactual changes two features: the closest takes `proline` and `malic_acid` from one of those
+wines. Each counterfactual also has a *counterpart*, the closest real wine that the model puts in
+its class (here, class 1). The
+[`TreeCounterfactualExplainer` notebook](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb)
+explains this output line by line.
 
-![The surrogate tree of the explanation](docs/images/explanation_tree.png)
+The counterfactuals are in `explanation.counterfactuals`, a DataFrame ranked from the closest to
+the instance. `explain` also takes the outcome you want (`desired=`, a class or, in regression,
+`"higher"` or `"lower"`) and the number of counterfactuals to keep, and the explainer takes
+`immutable_features=`. `explainer.explain_many` explains many instances at once, and
+`explainer.evaluate` measures the counterfactuals.
 
-## Counterfactual explanations
-
-### Options common to every method
-
-Every counterfactual explainer derives from `nife.counterfactual.CounterfactualExplainer`, so
-these options work the same way whatever the method:
-
-- **Desired outcome** (`desired`): a class, or in regression `"higher"`, `"lower"` or an
-  interval `(low, high)` (either bound may be `None`). Without it, any other outcome counts — in
-  regression, a prediction more than `tolerance` (5% by default) away from the instance's. The
-  model confirms every counterfactual, so they are always valid.
-- **Immutable features** (`immutable_features`): features that cannot change, such as age or sex;
-  no counterfactual changes them.
-- **Selection** (`max_counterfactuals`, `nondominated`): keep the closest counterfactuals, or those
-  that no other beats in both distance and number of changed features — the Pareto front of
-  Dandl et al. (2020). `select_counterfactuals` does the same on any set of counterfactuals.
-- **Many instances** (`explain_many`) and **evaluation** (`evaluate`), described below.
-
-### The surrogate decision tree method
-
-`TreeCounterfactualExplainer` implements and extends the method of Silva, Aguilar and Salvini
-(2026):
-
-1. **Neighborhood.** It samples a perturbed neighborhood of the instance, as LIME does, and
-   labels it with the model's predictions.
-2. **Surrogate tree.** A decision tree learns the model's behavior in that neighborhood. The
-   features it uses, with their importances, are the **relevant features** of the prediction; the
-   path of the instance from the root to its leaf is the **decision path**.
-3. **Counterfactuals.** Going up the decision path from the leaf, the first decision whose other
-   side the tree gives another outcome is the one to cross (Algorithm 1 of the paper). The examples
-   of the data on the other side of that decision that the model confirms are counterfactuals —
-   plausible, since they are real examples.
-
-Its own options:
-
-- **Parameters of the tree**: `max_depth` is 5 by default, as in the paper; `min_samples_split`
-  (0.1), `min_samples_leaf` (2) and `ccp_alpha` (0.02) default to the values of the original
-  research (the paper keeps scikit-learn's defaults). Any other parameter of scikit-learn's
-  decision trees goes in `tree_params`.
-- **Counterfactuals from the rules** (`from_rules=True`): for each feature of the decision path,
-  the instance with only that feature moved to the closest value, seen in the data on the other
-  side of the decision, that the model confirms. They change a single feature and are very close
-  to the instance, but are not real examples (`source` tells them apart: `"data"` or `"rules"`).
-- **Immutable features** are also fixed in the neighborhood, so the tree only splits on the others.
-- **Adaptive neighborhood** (default): the neighborhood starts narrow around the instance and only
-  widens until the tree has rules and a counterfactual is found, like the expanding spheres of
-  Growing Spheres (Laugel et al., 2017). A narrow neighborhood makes the tree agree with the model
-  around the instance; `adaptive=False` uses the global sample of the original method.
-- **Fidelity** (`explanation.fidelity`): whether the tree gives the instance the same outcome as
-  the model, and on what fraction of its 50 nearest examples they agree. The rules only explain
-  the prediction when the fidelity is high.
+`explanation.plot()` draws what the closest counterfactual changes, from the instance's values
+(blue) to the counterfactual's (orange), on the range of each feature in the data (the darker part
+of each bar is the middle 50% of the data):
 
 ```python
-from sklearn.datasets import load_diabetes
-from sklearn.ensemble import RandomForestRegressor
-
-X, y = load_diabetes(return_X_y=True, as_frame=True)
-model = RandomForestRegressor(random_state=0).fit(X, y)
-
-explainer = TreeCounterfactualExplainer(
-    model, X, mode="regression", categorical_features=["sex"], immutable_features=["age", "sex"]
-)
-explanation = explainer.explain(X.iloc[0], desired="lower", from_rules=True, nondominated=True)
+explanation.plot()
 ```
 
-### Explaining and evaluating many instances
+![What the closest counterfactual changes](docs/images/plot_changes.png)
 
-`explain_many` returns the counterfactuals of several instances in one DataFrame, with an
-`instance` column (the position of each instance), and `evaluate` measures them:
+## Guarantees and limits
 
-```python
-instances = X.sample(20, random_state=0)
-counterfactuals = explainer.explain_many(instances, desired="lower", nondominated=True)
-explainer.evaluate(instances, counterfactuals, desired="lower")
-```
+Every counterfactual that NIFE returns was checked with the model: its prediction is another
+outcome (or the desired one), and it does not change the immutable features. Beyond that:
 
-`nife.counterfactual.evaluate_counterfactuals` evaluates counterfactuals found by **any** method,
-NIFE's or not; `metrics=[...]` picks some of the metrics. Every metric is computed per instance
-and averaged over the instances with counterfactuals; distances are Gower distances (Gower, 1971),
-so numeric and categorical features can be mixed.
+- **A counterfactual may not exist.** NIFE can find none for an instance, mostly with many features
+  and few examples; the evaluation reports the coverage.
+- **No constraints beyond immutable features.** There are no allowed ranges and no direction of
+  change (such as "only increase"). Plausibility is measured, with the counterpart and the
+  evaluation metrics, not enforced.
+- **The tree is an approximation.** `TreeCounterfactualExplainer` explains with a local surrogate
+  tree whose agreement with the model (`explanation.fidelity`) depends on the model: check it
+  before trusting the rules.
+- **The model, not the real world.** A counterfactual is a change that makes the model predict
+  something else, not advice on what would change the real outcome.
+- **One-hot columns.** NIFE does not know that several columns come from one variable: a
+  counterfactual can turn on two columns of the same group, or none, so it may not be a valid
+  category. When you can, give each categorical feature a single numeric code and list it in
+  `categorical_features`.
 
-| Metric | Measures | Better | Reference |
-|---|---|---|---|
-| `coverage` | fraction of the instances with at least one counterfactual | higher | Pawelczyk et al. (2021) |
-| `count` | counterfactuals per instance | — | |
-| `validity` | fraction of the counterfactuals that reach a counterfactual outcome | higher | Wachter et al. (2018); Mothilal et al. (2020) |
-| `proximity` | distance between the instance and its counterfactuals | lower | Mothilal et al. (2020) |
-| `changed_features` | number of features changed (sparsity) | lower | Mothilal et al. (2020) |
-| `redundancy` | changed features that could be reverted without losing validity | lower | Pawelczyk et al. (2021) |
-| `implausibility` | distance to the closest example of the data | lower | Guidotti (2022) |
-| `ynn` | fraction of the k nearest examples that also get a counterfactual outcome | higher | Pawelczyk et al. (2021) |
-| `diversity` | distance between the counterfactuals of the same instance | higher | Mothilal et al. (2020) |
-| `constraint_violations` | fraction of the counterfactuals that change an immutable feature | lower | Pawelczyk et al. (2021) |
+Explaining one instance took seconds in tests with up to 200,000 rows (20 features) and up to 1,000
+features (500 rows).
 
-## Extending NIFE
+## Notebooks
 
-**A new counterfactual method** derives from `CounterfactualExplainer` and only finds candidates;
-the base class confirms them with the model, enforces the desired outcome and the immutable
-features, ranks, selects and evaluates them:
+Each kind of explanation and each method has its own notebook in [`notebooks/`](notebooks),
+organized like the package. They run on datasets bundled with scikit-learn:
 
-```python
-from nife.counterfactual import CounterfactualExplainer
+- [Counterfactual explanations](notebooks/counterfactual/counterfactual_explanations.ipynb) — what
+  NIFE calls a counterfactual and its counterpart, the options common to every method, how to
+  explain many instances at once, and the `changes` plot:
+  - [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) —
+    the surrogate decision tree method: the counterfactual rule and its evidence, the
+    counterfactuals, the plots of the tree and its export, its options and its fidelity;
+  - [`TreeCounterfactualExplainer` neighborhood](notebooks/counterfactual/TreeCounterfactualExplainer_neighborhood.ipynb) —
+    the perturbed samples that its tree is trained on: extract them, change them and pass them
+    back, or explain with a sampler of your own;
+  - [Evaluating counterfactuals](notebooks/counterfactual/evaluation.ipynb) — the metrics, for
+    counterfactuals found by any method, and how to add new ones.
+- [Plots](notebooks/plots.ipynb) — the plots of every explanation, and how to place them in figures
+  of your own, save them and change their colors.
+- [Extending NIFE](notebooks/extending.ipynb) — new methods, metrics, plots and kinds of
+  explanation, and how to document them.
 
-
-class NearestExamples(CounterfactualExplainer):
-    """Every example of the data is a candidate; the closest valid ones win."""
-
-    def _search(self, x, prediction, desired, rng):
-        return self.data.assign(source="data"), {}  # candidates and extra fields of the explanation
-```
-
-**A new metric** is a function of an `EvaluationContext`, registered once and reported by every
-evaluation from then on:
-
-```python
-from nife.counterfactual import register_metric
-
-
-@register_metric("max_change", better="lower", reference="—")
-def max_change(ctx):
-    """Largest scaled change of a single feature."""
-    numeric_cf, numeric_x = ctx.cf_points[0], ctx.x_points[0][ctx.owner]
-    return abs(numeric_cf - numeric_x).max(axis=1)
-```
-
-**A new kind of explanation** is a new subpackage next to `nife.counterfactual`, with its
-methods and metrics; shared tools, such as the Gower distance (`nife.distance`), stay at the top
-level. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Examples
-
-The [`examples/`](examples) folder has notebooks that run on datasets bundled with scikit-learn:
-
-- [`classification.ipynb`](examples/classification.ipynb) — wine cultivars: an explanation in
-  detail, desired classes, selection and evaluation;
-- [`regression.ipynb`](examples/regression.ipynb) — diabetes progression: desired outcomes,
-  immutable features, counterfactuals from the rules and the fidelity of the tree.
-
-To run them: `pip install "nife[examples]"`.
+The tests run every notebook, so they keep working as NIFE changes. To run the notebooks
+yourself, install their requirements: `pip install "nife[notebooks]"`.
 
 ## How to cite
 
@@ -229,28 +153,19 @@ If you use NIFE, please cite it:
 The "Cite this repository" button on GitHub gives the same citation, from
 [`CITATION.cff`](CITATION.cff).
 
-If you use one of NIFE's methods, please also cite the work that introduced it:
+If you use one of NIFE's methods, please also cite the work that introduced it; each method's
+notebook has its BibTeX entry:
 
 | Method | Reference |
 |---|---|
-| `TreeCounterfactualExplainer` | Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*, pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052 |
+| [`TreeCounterfactualExplainer`](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb) | Silva, J., Aguilar, E. and Salvini, R. (2026). Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees. In *Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) — Volume 4*, pages 2941–2948. SciTePress. https://doi.org/10.5220/0014338700004052 |
 
-```bibtex
-@inproceedings{silva2026unveiling,
-  author    = {Silva, Jurandir and Aguilar, Eduardo and Salvini, Rogerio},
-  title     = {Unveiling Concise Counterfactual Explanations and Feature Relevance in Machine Learning through Decision Trees},
-  booktitle = {Proceedings of the 18th International Conference on Agents and Artificial Intelligence (ICAART 2026) - Volume 4},
-  pages     = {2941--2948},
-  year      = {2026},
-  publisher = {SciTePress},
-  doi       = {10.5220/0014338700004052},
-  isbn      = {978-989-758-796-2},
-  issn      = {2184-433X}
-}
-```
+`TreeCounterfactualExplainer` is based on this paper and extends it, for example with an adaptive
+neighborhood and counterfactuals that the model confirms, so its defaults do not give the paper's
+results. The notebook has a section on
+[reproducing the paper](notebooks/counterfactual/TreeCounterfactualExplainer.ipynb#Reproducing-the-paper).
 
-The evaluation metrics have their own references, listed in the
-[metrics table](#explaining-and-evaluating-many-instances).
+The concepts and metrics that NIFE uses have their own references, listed in each notebook.
 
 ## Contributing
 
@@ -259,15 +174,3 @@ Bug reports, questions and pull requests are welcome — see [CONTRIBUTING.md](C
 ## License
 
 NIFE is released under the [MIT License](LICENSE).
-
-## References
-
-- Dandl, S., Molnar, C., Binder, M., & Bischl, B. (2020). Multi-objective counterfactual explanations. *Parallel Problem Solving from Nature (PPSN XVI)*.
-- Gower, J. C. (1971). A general coefficient of similarity and some of its properties. *Biometrics*, 27(4), 857–871.
-- Guidotti, R. (2022). Counterfactual explanations and how to find them: literature review and benchmarking. *Data Mining and Knowledge Discovery*. https://doi.org/10.1007/s10618-022-00831-6
-- Laugel, T., Lesot, M.-J., Marsala, C., Renard, X., & Detyniecki, M. (2017). Inverse classification for comparison-based interpretability in machine learning. *arXiv:1712.08443*.
-- Mothilal, R. K., Sharma, A., & Tan, C. (2020). Explaining machine learning classifiers through diverse counterfactual explanations. *FAT\* '20*. https://doi.org/10.1145/3351095.3372850
-- Pawelczyk, M., Bielawski, S., van den Heuvel, J., Richter, T., & Kasneci, G. (2021). CARLA: A Python library to benchmark algorithmic recourse and counterfactual explanation algorithms. *NeurIPS Datasets and Benchmarks Track*.
-- Ribeiro, M. T., Singh, S., & Guestrin, C. (2016). "Why should I trust you?": Explaining the predictions of any classifier. *Proceedings of the 22nd ACM SIGKDD*, 1135–1144.
-- Silva, J., Aguilar, E., & Salvini, R. (2026). Unveiling concise counterfactual explanations and feature relevance in machine learning through decision trees. *ICAART 2026*, 2941–2948. https://doi.org/10.5220/0014338700004052
-- Wachter, S., Mittelstadt, B., & Russell, C. (2018). Counterfactual explanations without opening the black box: automated decisions and the GDPR. *Harvard Journal of Law & Technology*, 31(2), 841–887.

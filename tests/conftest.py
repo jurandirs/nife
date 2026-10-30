@@ -8,6 +8,15 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 matplotlib.use("Agg")
 
 
+@pytest.fixture(autouse=True)
+def close_figures():
+    """Close the figures each test draws."""
+    yield
+    import matplotlib.pyplot as plt
+
+    plt.close("all")
+
+
 class ThresholdModel:
     """``high`` when x1 + x2 > 10, ``low`` otherwise."""
 

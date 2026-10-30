@@ -42,14 +42,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-examples = ["jupyter"]
-dev = ["pytest>=7", "build", "twine"]
+notebooks = ["jupyter"]
+dev = ["pytest>=7", "build", "twine", "nbclient", "nbformat", "ipykernel"]
 
 [project.urls]
 Homepage = "https://github.com/jurandirs/nife"
 Repository = "https://github.com/jurandirs/nife"
 Issues = "https://github.com/jurandirs/nife/issues"
 Changelog = "https://github.com/jurandirs/nife/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/jurandirs/nife/tree/main/notebooks"
 
 [tool.setuptools.packages.find]
 where = ["src"]
