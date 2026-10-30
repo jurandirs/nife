@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nife"
+name = "nife-xai"
 version = "0.1.0"
 description = "NIFE Is a Framework for Explanations: explanations of machine-learning models, starting with counterfactual explanations"
 readme = "README.md"

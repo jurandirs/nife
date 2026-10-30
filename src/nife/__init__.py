@@ -25,7 +25,7 @@ the top level.
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("nife")
+    __version__ = version("nife-xai")
 except PackageNotFoundError:  # not installed
     __version__ = "unknown"
 

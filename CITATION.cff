@@ -3,6 +3,7 @@ message: "If you use NIFE, please cite it as below. If you use one of its method
 title: "NIFE: NIFE Is a Framework for Explanations"
 type: software
 version: 0.1.0
+date-released: 2026-10-30
 license: MIT
 repository-code: "https://github.com/jurandirs/nife"
 url: "https://github.com/jurandirs/nife"

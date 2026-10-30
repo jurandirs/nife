@@ -1,7 +1,7 @@
 # NIFE — NIFE Is a Framework for Explanations
 
-[![PyPI](https://img.shields.io/pypi/v/nife.svg)](https://pypi.org/project/nife/)
-[![Python](https://img.shields.io/pypi/pyversions/nife.svg)](https://pypi.org/project/nife/)
+[![PyPI](https://img.shields.io/pypi/v/nife-xai.svg)](https://pypi.org/project/nife-xai/)
+[![Python](https://img.shields.io/pypi/pyversions/nife-xai.svg)](https://pypi.org/project/nife-xai/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jurandirs/nife/blob/main/LICENSE)
 
 NIFE is a Python framework for explaining the predictions of machine-learning models. Today it
@@ -25,8 +25,10 @@ Classification is the default; for a regression model, pass `mode="regression"`.
 ## Installation
 
 ```bash
-pip install nife
+pip install nife-xai
 ```
+
+The package is `nife-xai` on PyPI, and you import it as `nife`.
 
 NIFE requires Python 3.10 or later, with NumPy, pandas, scikit-learn and matplotlib. To install
 the development version from GitHub:
@@ -134,7 +136,7 @@ organized like the package. They run on datasets bundled with scikit-learn:
   explanation, and how to document them.
 
 The tests run every notebook, so they keep working as NIFE changes. To run the notebooks
-yourself, install their requirements: `pip install "nife[notebooks]"`.
+yourself, install their requirements: `pip install "nife-xai[notebooks]"`.
 
 ## How to cite
 
